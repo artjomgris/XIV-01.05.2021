@@ -85,48 +85,48 @@ func Socket(w http.ResponseWriter, req *http.Request) {
 		panic(err)
 		return
 	}
-	messageType, p, err := conn.ReadMessage()
-	if err != nil {
-		panic(err)
-		return
-	}
-	log.Println(string(p)[0:6])
-	if string(p)[0:6] == "getmsg" {
-		msg := string(p)
-		var id int
-		id, err = strconv.Atoi(msg[6:])
-		fmt.Println(id)
+	for {
+		messageType, p, err := conn.ReadMessage()
 		if err != nil {
 			panic(err)
+			return
 		}
-		for _, j := range sclients {
-			if j.Messages == nil {
-				if err := conn.WriteMessage(messageType, nil); err != nil {
-					panic(err)
-				}
-			} else {
-				if j.Id == id {
-					fmt.Println(j.Messages)
-					jsmsg, err := json.Marshal(j.Messages)
-					if err != nil {
-						panic(err)
-					}
-					if err := conn.WriteMessage(messageType, jsmsg); err != nil {
-						panic(err)
-					}
-					j.Messages = nil
-				}
+		log.Println(string(p)[0:6])
+		if string(p)[0:6] == "getmsg" {
+			msg := string(p)
+			var id int
+			id, err = strconv.Atoi(msg[6:])
+			if err != nil {
+				panic(err)
 			}
+			for _, j := range sclients {
+				if j.Messages == nil {
+					if err := conn.WriteMessage(messageType, nil); err != nil {
+						panic(err)
+					}
+				} else {
+					if j.Id == id {
+						fmt.Println(j.Messages)
+						jsmsg, err := json.Marshal(j.Messages)
+						if err != nil {
+							panic(err)
+						}
+						if err := conn.WriteMessage(messageType, jsmsg); err != nil {
+							panic(err)
+						}
+						j.Messages = nil
+					}
+				}
 
-		}
-	} else {
-		log.Println(string(p))
-		var message Client
-		err = json.Unmarshal(p, &message)
-		id := message.Message.AddrId
-		for _, j := range sclients {
-			if j.Id == id {
-				j.Messages = append(j.Messages, message)
+			}
+		} else {
+			var message Client
+			err = json.Unmarshal(p, &message)
+			id := message.Message.AddrId
+			for _, j := range sclients {
+				if j.Id == id {
+					j.Messages = append(j.Messages, message)
+				}
 			}
 		}
 	}

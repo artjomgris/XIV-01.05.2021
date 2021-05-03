@@ -80,15 +80,17 @@ func main() {
 
 func readMessage(c *websocket.Conn) {
 	for {
-		log.Println("READ")
 		err := c.WriteMessage(websocket.TextMessage, []byte("getmsg"+strconv.Itoa(client.Id)))
 		_, message, err := c.ReadMessage()
 		if err != nil {
 			log.Println("read:", err)
 			return
 		}
-		log.Printf("Message: %s", message)
-		time.Sleep(1 * time.Second)
+		if string(message) != "" {
+			log.Printf("Message: %s", message)
+			time.Sleep(1 * time.Second)
+		}
+
 	}
 }
 
