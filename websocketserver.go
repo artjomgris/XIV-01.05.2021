@@ -1,32 +1,46 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"net/http"
+	"github.com/gorilla/websocket"
 	"io"
 	"log"
-	"github.com/gorilla/websocket"
+	"net/http"
+	"strconv"
 )
 
 type Sclient struct {
-	Id int `json:"id"`
-	Ip string `json:"ip"`
-	Name string `json:"name"`
+	Id       int    `json:"id"`
+	Ip       string `json:"ip"`
+	Name     string `json:"name"`
+	Messages []Client
 }
-var sclients []Sclient
 
+type Client struct {
+	Id      int    `json:"id"`
+	Name    string `json:"name"`
+	Message struct {
+		Body   string `json:"body"`
+		AddrId int    `json:"addr_id"`
+	}
+}
+
+var sclients []Sclient
 var upgrader = websocket.Upgrader{}
 
 func Handler(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin","*")
-	w.Header().Set("Access-Control-Allow-Methods","POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "content-type")
-	
+
 	if req.Method == "POST" {
 		data, err := io.ReadAll(req.Body)
 		req.Body.Close()
-		if err != nil {return }
-		
+		if err != nil {
+			return
+		}
+
 		log.Printf("%s\n", data)
 		io.WriteString(w, "successful post")
 	} else if req.Method == "OPTIONS" {
@@ -34,26 +48,22 @@ func Handler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		w.WriteHeader(405)
 	}
-	
+
 }
 
 func Registration(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin","*")
-	w.Header().Set("Access-Control-Allow-Methods","POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "content-type")
 
 	if req.Method == "POST" {
 		data, err := io.ReadAll(req.Body)
 		req.Body.Close()
-		if err != nil {return }
-		strdata := string(data)
-		for _, j := range sclients {
-			if j.Name == strdata {
-				io.WriteString(w, "666")
-				break
-			}
+		if err != nil {
+			return
 		}
-		id := len(sclients)+1
+		strdata := string(data)
+		id := len(sclients) + 1
 		sclients = append(sclients, Sclient{
 			Id:   id,
 			Ip:   req.RemoteAddr,
@@ -75,26 +85,59 @@ func Socket(w http.ResponseWriter, req *http.Request) {
 		panic(err)
 		return
 	}
-	for {
-		messageType, p, err := conn.ReadMessage()
+	messageType, p, err := conn.ReadMessage()
+	if err != nil {
+		panic(err)
+		return
+	}
+	log.Println(string(p)[0:6])
+	if string(p)[0:6] == "getmsg" {
+		msg := string(p)
+		var id int
+		id, err = strconv.Atoi(msg[6:])
+		fmt.Println(id)
 		if err != nil {
 			panic(err)
-			return
 		}
-		if err := conn.WriteMessage(messageType, p); err != nil {
-			panic(err)
-			return
+		for _, j := range sclients {
+			if j.Messages == nil {
+				if err := conn.WriteMessage(messageType, nil); err != nil {
+					panic(err)
+				}
+			} else {
+				if j.Id == id {
+					fmt.Println(j.Messages)
+					jsmsg, err := json.Marshal(j.Messages)
+					if err != nil {
+						panic(err)
+					}
+					if err := conn.WriteMessage(messageType, jsmsg); err != nil {
+						panic(err)
+					}
+					j.Messages = nil
+				}
+			}
+
 		}
+	} else {
 		log.Println(string(p))
+		var message Client
+		err = json.Unmarshal(p, &message)
+		id := message.Message.AddrId
+		for _, j := range sclients {
+			if j.Id == id {
+				j.Messages = append(j.Messages, message)
+			}
+		}
 	}
+
 }
 
 func main() {
 	http.HandleFunc("/", Handler)
 	http.HandleFunc("/socket", Socket)
 	http.HandleFunc("/register", Registration)
-	
+
 	err := http.ListenAndServe(":8080", nil)
 	panic(err)
 }
-

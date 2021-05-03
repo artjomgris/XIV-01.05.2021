@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -13,16 +12,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Client struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
+	Id      int    `json:"id"`
+	Name    string `json:"name"`
 	Message struct {
-		Body string `json:"body"`
-		AddrId int `json:"addr_id"`
+		Body   string `json:"body"`
+		AddrId int    `json:"addr_id"`
 	}
 }
+
 var client Client
 
 func main() {
@@ -42,41 +43,52 @@ func main() {
 	for {
 		fmt.Println("Type ID Message")
 		text, _ := reader.ReadString('\n')
-
-		if text[0:5] == "/info" {
-			/*var users []Client
-			users := getUsers()
-			fmt.Println(string(users))*/
-			fmt.Println(111)
-		} else {
-			i := strings.Index(text, " ")
-			client.Message.AddrId, err = strconv.Atoi(text[0:i+1])
-			if err == nil {
-				client.Message.Body = text[i:]
-				msg, err := json.Marshal(client)
-				if err != nil {
-					panic(err)
-				}
-				err = c.WriteMessage(websocket.TextMessage, msg)
-				if err != nil {
-					panic(err)
-				}
+		if len(text) >= 5 {
+			if text[0:5] == "/info" {
+				/*var users []Client
+				users = getUsers()
+				fmt.Println(string(users))*/
+				fmt.Println(111)
 			} else {
-				fmt.Println("Please enter your message as [ID MESSAGE]")
-			}
+				i := strings.Index(text, " ")
+				if i == -1 {
+					fmt.Println("Please enter your message as [ID MESSAGE] OR /info")
+				} else {
+					client.Message.AddrId, err = strconv.Atoi(text[0:i])
+					if err == nil {
+						client.Message.Body = text[i:]
+						msg, err := json.Marshal(client)
+						if err != nil {
+							panic(err)
+						}
+						err = c.WriteMessage(websocket.TextMessage, msg)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						fmt.Println("Please enter your message as [ID MESSAGE] OR /info")
+					}
+				}
 
+			}
+		} else {
+			fmt.Println("Please enter your message as [ID MESSAGE] OR /info")
 		}
+
 	}
 }
 
 func readMessage(c *websocket.Conn) {
 	for {
+		log.Println("READ")
+		err := c.WriteMessage(websocket.TextMessage, []byte("getmsg"+strconv.Itoa(client.Id)))
 		_, message, err := c.ReadMessage()
 		if err != nil {
 			log.Println("read:", err)
 			return
 		}
 		log.Printf("Message: %s", message)
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -98,7 +110,7 @@ func register(name string) int {
 	var body bytes.Buffer
 	body.Write([]byte(name))
 
-	req, err := http.NewRequest("GET", "http://127.0.0.1:8080/register", &body)
+	req, err := http.NewRequest("POST", "http://127.0.0.1:8080/register", &body)
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
